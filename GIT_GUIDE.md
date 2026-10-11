@@ -1,16 +1,3 @@
-# Learning Git with this project
-
-Git records local snapshots of your work. GitHub stores a remote copy that you
-can share and use for collaboration. A commit stays on your computer until you
-push it. Ignoring a file does not delete it from your drive.
-
-## What this repository contains
-
-Version the R and shell scripts, configuration, Snakefile, and documentation.
-Generated data, results, reports, logs, caches and the large Linux runtime are
-excluded by `.gitignore`. Everything in this project is simulated; never add
-restricted participant data or credentials to the repository.
-
 GATE currently depends on a locally prepared runtime and preserved dependency
 archives. Cloning this repository alone does not recreate that runtime. See
 GATE_PILOT.md and the methodology source for its installation record.
