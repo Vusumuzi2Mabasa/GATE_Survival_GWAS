@@ -1,20 +1,14 @@
 # Simulated survival GWAS in R
 
-A complete **training workflow** from synthetic genotypes and survival records
+A complete **practice workflow** from synthetic genotypes and survival records
 through QC, association discovery, independent replication and an R-generated
 report. This is not AWI-Gen data, a dense human GWAS, or a production pipeline for
-restricted participant data. The earlier one-variant example remains separate.
+restricted participant data. 
 
-## Open the result
 
-Open `report/index.html` in a browser after the pipeline finishes. The report uses
-**gtsummary**, **flextable** and **ggplot2**. R table objects are saved in
-`report/tables/` so you can restyle them without refitting the models.
+## Run 
 
-## Run on this computer
-
-All project files are on **D:\survival_gwas_simulation**, the Toshiba external
-drive. The drive must remain connected throughout the run.
+All project files are available upon request. 
 
 ```powershell
 Set-Location D:\survival_gwas_simulation
