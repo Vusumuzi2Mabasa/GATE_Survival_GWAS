@@ -230,12 +230,7 @@ The Snakemake workflow and `scripts/run_all.R` both include the Word stage.
 
 ## GATE extension
 
-GATE 0.45 is installed in an isolated Linux runtime image on this Toshiba drive.
-Both 2160-variant survival scans completed and passed output validation. See
-[GATE_PILOT.md](GATE_PILOT.md) for execution commands, build changes, and limits.
-The R-authored supplement is `report/GATE_Survival_GWAS_Results.docx`.
-Signal: 21 panel Bonferroni hits. Null: zero hits. Both scans show deflation;
-the non-LOCO run is an implementation trial, not a production calibration claim.
+GATE 0.45 was used for analyses.
 
 ## Method references
 
