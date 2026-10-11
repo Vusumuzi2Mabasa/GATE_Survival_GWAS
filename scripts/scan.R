@@ -1,0 +1,8 @@
+source('scripts/common.R')
+args <- commandArgs(TRUE); scenario <- args[1]; chr <- as.integer(args[2])
+stopifnot(scenario %in% c('signal', 'null'), chr %in% 1:22)
+x <- load_analysis('discovery')
+jj <- which(x$variants$chr == chr)
+res <- lapply(jj, function(j) cbind(x$variants[j, ], fit_variant(x$pheno, x$G[, j], scenario)$row))
+write_tsv(do.call(rbind, res), sprintf('results/scan/%s/chr%02d.tsv', scenario, chr))
+message(scenario, ' chromosome ', chr, ': ', length(jj), ' tests')

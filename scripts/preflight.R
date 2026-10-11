@@ -1,0 +1,11 @@
+options(warn = 1)
+stopifnot(file.exists('config.R'), dir.exists('scripts'))
+packages <- c('survival', 'gtsummary', 'flextable', 'ggplot2', 'htmltools')
+present <- vapply(packages, requireNamespace, logical(1), quietly = TRUE)
+if (!all(present)) stop('Missing R packages: ', paste(packages[!present], collapse = ', '))
+dir.create('logs', showWarnings = FALSE)
+versions <- data.frame(package = packages,
+  version = vapply(packages, function(p) as.character(packageVersion(p)), character(1)))
+write.table(versions, 'logs/environment.tsv', sep = '\t', row.names = FALSE, quote = FALSE)
+cat('Working directory:', getwd(), '\n')
+print(versions)

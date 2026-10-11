@@ -1,0 +1,116 @@
+# Run from the project root after scripts/report.R. No Pandoc is required.
+library(officer)
+library(flextable)
+library(gtsummary)
+read_result <- function(path) read.delim(path, check.names = FALSE)
+ft <- readRDS('report/tables/flextables.rds')
+signal <- read_result('results/summary/signal_metrics.tsv')
+null <- read_result('results/summary/null_metrics.tsv')
+replication <- read_result('results/replication/lead_results.tsv')
+cal <- read_result('results/validation/null_calibration_summary.tsv')
+checks <- read_result('results/validation/checks.tsv')
+ph <- read_result('results/replication/ph_diagnostics.tsv')
+doc <- read_docx()
+doc <- body_set_default_section(doc, prop_section(
+  page_size = page_size(width = 8.5, height = 11),
+  page_margins = page_mar(top = .7, bottom = .7, left = .75, right = .75)))
+for (spec in list(c('Normal', 11), c('Title', 24), c('heading 1', 16))) {
+  info <- styles_info(doc)
+  id <- info$style_id[info$style_name == spec[1]][1]
+  doc <- docx_set_paragraph_style(doc, style_id = id, style_name = spec[1],
+    fp_p = fp_par(padding.bottom = 8, line_spacing = 1.08,
+                  keep_with_next = spec[1] != 'Normal'),
+    fp_t = fp_text(font.family = 'Arial', font.size = as.numeric(spec[2]),
+                   color = '#000000', bold = spec[1] != 'Normal'))
+}
+p <- function(text, style = 'Normal') doc <<- body_add_par(doc, text, style = style)
+h <- function(text) p(text, 'heading 1')
+page <- function() doc <<- body_add_break(doc)
+tab <- function(x, widths = NULL) {
+  if (!inherits(x, 'flextable')) x <- flextable(x)
+  x <- font(x, fontname = 'Arial', part = 'all')
+  x <- fontsize(x, size = 10, part = 'all')
+  x <- padding(x, padding = 5, part = 'all')
+  x <- bg(x, bg = '#17365D', part = 'header')
+  x <- color(x, color = 'white', part = 'header')
+  x <- bg(x, bg = rep(c('white', '#F0F4F8'), length.out = nrow(x$body$dataset)), part = 'body')
+  x <- border_outer(x, border = fp_border(color = '#D9D9D9', width = .5), part = 'all')
+  x <- border_inner(x, border = fp_border(color = '#D9D9D9', width = .5), part = 'all')
+  x <- valign(x, valign = 'center', part = 'all')
+  if (ncol(x$body$dataset) > 1) x <- align(x, j = 2:ncol(x$body$dataset), align = 'center', part = 'all')
+  if (is.null(widths)) widths <- c(3.4, rep(3.6/(ncol(x$body$dataset)-1), ncol(x$body$dataset)-1))
+  x <- width(x, width = widths)
+  x <- set_table_properties(x, layout = 'fixed', opts_word = list(split = FALSE, repeat_headers = TRUE))
+  doc <<- body_add_flextable(doc, x)
+  p('')
+}
+plot <- function(name, height = 3.35) {
+  doc <<- body_add_img(doc, file.path('report/plots', name), width = 7, height = height)
+}
+p('Simulated survival GWAS results', 'Title')
+p('Analysis report for Vusumuzi Mabasa')
+p(paste('Generated in R on', format(Sys.Date(), '%d %B %Y')))
+p(sprintf('The pipeline identified %d significant markers representing three planted signal regions. All three selected lead variants replicated in an independent simulated cohort. These results demonstrate the workflow under its simulation assumptions; they are not findings from AWI Gen or another human study.', signal$significant_variants))
+h('Study design and main findings')
+p('Two independent synthetic cohorts were generated with six sites, two ancestry groups, linkage disequilibrium between nearby markers, and up to five years of follow-up. The discovery analysis retained 3,588 participants and 981 events; replication retained 2,388 participants and 644 events.')
+tab(ft$qc)
+p(sprintf('The discovery scan tested %s common variants. The analysis-specific Bonferroni threshold was %.3g (0.05 divided by the planned tests). The conventional 5e-8 threshold is shown separately and must not be confused with this smaller simulated scan.', format(signal$planned_tests, big.mark = ','), signal$scan_threshold))
+p(sprintf('All %d computational checks passed. The complete null scan produced %d significant results at its Bonferroni threshold. Repeated null simulations provide an additional, limited calibration assessment.', nrow(checks), null$significant_variants))
+page()
+h('Cohort characteristics')
+p('Values are median (first quartile, third quartile) or count (percentage). Characteristics describe participants retained after quality control. Event status refers to the signal outcome.')
+tab(as_flex_table(readRDS('report/tables/cohort_gtsummary.rds')), c(3.4, 1.8, 1.8))
+page()
+h('Population structure and follow up')
+plot('pca.png', 3.25)
+p('Figure 1. Principal components from pruned genotypes show the simulated population structure. Three principal components enter each association model.')
+plot('survival.png', 3.25)
+p('Figure 2. Unadjusted Kaplan-Meier curves describe event-free survival. They do not estimate a genetic effect. Numbers at risk at years 0, 1, 3 and 5 were 3,588, 3,276, 2,620 and 2,082 in discovery and 2,388, 2,203, 1,804 and 1,432 in replication.')
+page()
+h('Discovery association results')
+plot('signal_manhattan.png')
+p('Figure 3. Signal-outcome association results by chromosome. Nearby significant variants can tag the same planted signal through linkage disequilibrium; they do not represent separate causal discoveries.')
+tab(ft$association)
+p('Each variant was tested with an additive Cox proportional hazards model, adjusted for age, simulated sex and three principal components, with baseline hazards stratified jointly by site and ancestry group. Efron handling was used for ties. P values are two-sided Wald tests; failed fits would not be counted as significant.')
+page()
+h('Independent replication')
+p('Discovery signals were clumped using an LD threshold of r squared 0.2 within 250 kb. Each selected lead was tested in the independent replication cohort, with aligned effect alleles and a consistent direction required. The replication threshold was 0.05 divided by the number of selected leads.')
+rd <- data.frame(Variant = replication$variant,
+  'Discovery HR and p' = sprintf('%.3f\np = %.2g', replication$discovery_hr, replication$discovery_p),
+  'Replication HR and 95% CI' = sprintf('%.3f\n%.3f to %.3f', replication$replication_hr, replication$replication_lower95, replication$replication_upper95),
+  'Replication p' = sprintf('%.2g', replication$replication_p), check.names = FALSE)
+tab(rd, c(1.35, 1.65, 2.4, 1.6))
+plot('replication.png', 2.85)
+p('Figure 4. Replication hazard ratios and 95% confidence intervals. HR is per additional effect allele; intervals are unadjusted 95% intervals, while replication decisions use the corrected p-value threshold.')
+p('The chromosome 10 lead sim_rs00947 tags the planted causal variant sim_rs00945. The chromosome 18 lead meets the simulated scan threshold but does not meet 5e-8 in discovery. Lead variants should therefore not all be labelled causal or conventionally genome-wide significant.')
+p(sprintf('Among %d exploratory global proportional hazards tests for selected lead models, %d had p < 0.05. These selected-model diagnostics do not prove proportional hazards for every variant.', sum(ph$term == 'GLOBAL'), sum(ph$p[ph$term == 'GLOBAL'] < .05)))
+page()
+h('Null calibration and simulation recovery')
+plot('qq.png', 2.9)
+p('Figure 5. Quantile-quantile plots for the signal and full null scans. A single null scan is an imprecise calibration assessment.')
+plot('null_calibration.png', 2.9)
+p(sprintf('Figure 6. Across %d new null outcome draws on a fixed panel of %d LD-pruned markers, the mean nominal p < 0.05 rate was %.2f%% (Monte Carlo SE %.2f percentage points; approximate 95%% interval %.2f%% to %.2f%%). Mean lambda GC was %.3f.', cal$repetitions, cal$markers_per_repetition, 100*cal$mean_nominal_rate, 100*cal$monte_carlo_se, 100*cal$nominal_rate_lower95, 100*cal$nominal_rate_upper95, cal$mean_lambda_gc))
+p(sprintf('Pruned-panel family-wise error was %.1f%% (exact 95%% interval %.2f%% to %.2f%%). This small, fixed-genotype experiment is not a precise estimate of full-GWAS error control or power.', 100*cal$pruned_panel_fwer, 100*cal$pruned_panel_fwer_lower95, 100*cal$pruned_panel_fwer_upper95))
+page()
+h('Methods and interpretation')
+p('Quality control removed deliberately injected duplicate records, excessive missingness, extreme heterozygosity, rare or monomorphic variants, and variants failing within-ancestry Hardy-Weinberg equilibrium checks. Thresholds were sample missingness 3%, marker missingness 2%, minor allele frequency 5%, minor allele count 100 and HWE p-value 1e-6. LD pruning used r squared 0.2 within 250 kb. Mean imputation was used only for PCA; association models used observed genotypes.')
+tab(ft$recovery, c(5.5, 1.5))
+p('Truth labels were used after association analysis to evaluate recovery. Recovery in this run is descriptive: deliberately large planted effects and the shared data-generating process make this an educational demonstration, not an estimate of realistic study power.')
+h('Limits before applying this to real data')
+p('The simulation assumes unrelated individuals, common variants, known event times and independent censoring. Real data require phenotype and time-origin definitions, assessment of relatedness, genotype and imputation quality, ancestry and batch effects, and a justified survival model. Visit-based event ascertainment can introduce interval censoring. Population structure adjustment alone does not handle all relatedness. A scalable survival GWAS method should be evaluated before analysing millions of variants.')
+page()
+h('Reproducibility and sources')
+p('The report is authored in R with officer and flextable, using a gtsummary cohort table and ggplot2 figures. Tables and text are editable in Word; plots are embedded images and can be regenerated from the R source. No Pandoc installation is required.')
+p('Project: D:/survival_gwas_simulation. From that project directory, run Rscript --vanilla scripts/report_word.R after the HTML reporting stage. The complete Snakemake workflow also produces this document. Configuration and simulation seed are in config.R; package versions and source checksums accompany the results.')
+p('Simulation seed: 20261008. Computational validation includes sample and variant alignment, scan coverage, correction thresholds, allele-flip invariance, direct Cox-model agreement and checks that discovery scripts do not read simulation truth. Passing these checks does not validate all scientific assumptions.')
+p('Primary methods and software references')
+for (s in c(
+  'R survival coxph documentation: https://stat.ethz.ch/R-manual/R-devel/library/survival/html/coxph.html',
+  'gwasurvivr package: https://bioconductor.org/packages/release/bioc/html/gwasurvivr.html',
+  'GATE survival GWAS method: https://www.nature.com/articles/s41467-022-32885-x',
+  'PLINK quality control: https://www.cog-genomics.org/plink/2.0/tutorials/qc1',
+  'gtsummary table conversion: https://www.danieldsjoberg.com/gtsummary/reference/as_flex_table.html')) p(s)
+p('These references describe methods and software; they are not the source of the simulated numerical findings above.')
+dir.create('report', showWarnings = FALSE)
+print(doc, target = 'report/Survival_GWAS_Results.docx')
+message('Created report/Survival_GWAS_Results.docx')
