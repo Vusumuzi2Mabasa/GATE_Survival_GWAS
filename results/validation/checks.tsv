@@ -1,0 +1,34 @@
+check	passed	detail
+HWE balanced genotypes	TRUE	
+HWE monomorphic boundary	TRUE	
+HWE excess heterozygotes	TRUE	
+HWE allele coding invariant	TRUE	
+Independent cohort IDs	TRUE	
+discovery sample alignment	TRUE	
+discovery variant alignment	TRUE	
+discovery positive bounded followup	TRUE	
+discovery finite PCs	TRUE	
+discovery injected bad samples excluded	TRUE	
+discovery injected bad variants excluded	TRUE	
+replication sample alignment	TRUE	
+replication variant alignment	TRUE	
+replication positive bounded followup	TRUE	
+replication finite PCs	TRUE	
+replication injected bad samples excluded	TRUE	
+replication injected bad variants excluded	TRUE	
+Complete signal scan	TRUE	
+Complete null scan	TRUE	
+P values in range	TRUE	
+Bonferroni includes entire QC family	TRUE	
+No failed fits labelled significant	TRUE	
+Allele flip changes sign	TRUE	
+Allele flip preserves p	TRUE	
+Per-variant complete-case N	TRUE	
+Wrapper agrees with direct Cox fit	TRUE	
+No ground-truth reads in scripts/qc.R	TRUE	
+No ground-truth reads in scripts/pca.R	TRUE	
+No ground-truth reads in scripts/scan.R	TRUE	
+No ground-truth reads in scripts/summarise.R	TRUE	
+No ground-truth reads in scripts/replicate.R	TRUE	
+Replication restricted to discovery leads	TRUE	
+Replication family correction	TRUE	

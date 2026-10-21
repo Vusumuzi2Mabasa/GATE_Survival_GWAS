@@ -1,0 +1,2 @@
+repetitions	markers_per_repetition	mean_nominal_rate	monte_carlo_se	nominal_rate_lower95	nominal_rate_upper95	mean_lambda_gc	pruned_panel_fwer	pruned_panel_fwer_lower95	pruned_panel_fwer_upper95	failed_tests
+20	216	0.0456018518518519	0.00399210638632721	0.037246277157512	0.0539574265461917	1.00906532506042	0.05	0.00126508949794981	0.248732762772028	0

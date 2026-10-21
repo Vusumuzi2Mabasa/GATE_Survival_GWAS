@@ -1,0 +1,2 @@
+scenario	planned_tests	successful_tests	failed_tests	scan_threshold	significant_variants	conventional_hits	nominal_p_below_05	lambda_gc
+signal	2160	2160	0	2.31481481481482e-05	23	20	0.0601851851851852	0.960851503129308
