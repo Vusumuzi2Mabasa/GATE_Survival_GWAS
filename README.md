@@ -1,104 +1,70 @@
-# Simulated survival GWAS in R
+# Survival genome-wide association analysis with GATE and Cox models
 
-A complete **practice workflow** from synthetic genotypes and survival records
-through QC, association discovery, independent replication and an R-generated
-report. This is not AWI-Gen data, a dense human GWAS, or a production pipeline for
-restricted participant data. 
+## Scope
 
+A reproducible computational study of survival association analysis using synthetic genotypes and time-to-event outcomes. The repository implements sample and variant quality control, population-structure adjustment, chromosome-level association testing, discovery and replication analysis, model diagnostics and R-generated reporting. A conventional Cox proportional hazards workflow is complemented by a GATE 0.45 survival mixed-model analysis of the same discovery cohort.
 
-## Run 
+The study evaluates workflow execution, recovery of simulated association signals and selected calibration properties under a defined data-generating model. All participants, population groups, sites and outcomes are synthetic. No AWI-Gen or other participant-level research data are used. The marker panel and sample size support a controlled computational assessment rather than a claim of biobank-scale performance.
 
-All project files are available upon request. 
+## Study design
 
-```powershell
-Set-Location D:\survival_gwas_simulation
-.\run_pipeline.ps1 -DryRun
-.\run_pipeline.ps1
-```
+The simulation specification is recorded in [config.R](config.R). Discovery and replication cohorts share generating parameters but have independently generated participants, genotypes and outcomes. Replication outcomes are not used to select discovery signals.
 
-The launcher uses the existing Ubuntu-24.04 WSL installation to run Snakemake and
-the existing Windows R 4.5.1 installation to execute every statistical and report
-script. It uses **two concurrent jobs** and a **4 GB scheduling budget**, not an
-enforced OS memory limit. Snakemake's isolated Python environment is under
-`.venv/` on D:. It contains orchestration dependencies, not statistical analyses.
-The report package versions are recorded in `logs/environment.tsv` and
-`report/tables/package_versions.tsv`.
+| Component | Specification |
+|---|---|
+| Cohorts | 3,600 discovery and 2,400 replication participants before fault injection |
+| Population structure | Six fictional sites and two fictional ancestry groups within sites |
+| Marker panel | 2,200 autosomal markers across 22 chromosomes; 10 blocks per chromosome and 10 markers per block |
+| Linkage disequilibrium | Independently generated haplotypes; markers copy a block anchor with probability 0.93 or are redrawn from the population frequency |
+| Genetic effects | Three direct-effect variants on chromosomes 3, 10 and 18, with conditional hazard ratios of 1.50, 0.67 and 1.40 |
+| Survival model | Weibull proportional hazards with site, ancestry group, age and sex effects; independent dropout and administrative censoring at five years |
+| Null outcome | The same covariate structure without genetic effects |
+| Technical perturbations | Sample and variant missingness, heterozygosity outliers, exact duplicate records, monomorphic or rare markers and Hardy–Weinberg departures |
+| Random seed | 20261008, with cohort-specific generation defined in the simulation code |
 
-Alternatively, from WSL:
+The simulated effect sizes are deliberately large to permit signal recovery in this limited sample. Marker coordinates are illustrative and do not correspond to a human genome assembly. The simulator produces RDS genotype matrices, phenotype TSV files and ordinary gzip-compressed VCFs. The primary Cox analysis uses the RDS matrices; the GATE extension exports PLINK and indexed VCF inputs. The workflow begins with simulated genotypes and does not include sequencing-read processing, imputation or a reference panel.
 
-```bash
-cd /mnt/d/survival_gwas_simulation
-bash run_snakemake.sh --dry-run
-bash run_snakemake.sh
-```
-
-To run the identical stages sequentially without Snakemake, from the project root:
-
-```powershell
-& 'C:/Program Files/R/R-4.5.1/bin/Rscript.exe' --vanilla scripts/run_all.R
-```
-
-That alternative reruns every stage. The Snakemake launcher runs only stages
-requiring updates. A changed config causes downstream regeneration. Copy the
-project or archive outputs before trying a new configuration: result filenames
-are stable and rerunning replaces them. All R entrypoints use `--vanilla` so
-personal startup files do not affect execution.
-
-## Workflow
+## Analytical workflow
 
 ```text
-Environment check -> simulate independent discovery and replication cohorts
-                      |                       |
-                 sample/variant QC       sample/variant QC
-                      |                       |
-                 LD pruning + PCA        LD pruning + PCA
-                      |
-              22-chromosome Cox scans
-              (signal and null outcomes)
-                      |
-              multiple-testing summaries
-                      |
-              LD clumping -> test discovery leads in replication
-                      |
-              PH diagnostics + site sensitivity
-                      |
-              computational checks + reveal simulation truth
-              + 20 repeated null-outcome calibration runs
-                      |
-              gtsummary / flextable / ggplot2 HTML report
+Independent discovery and replication cohorts
+                    |
+          Sample and variant quality control
+                    |
+              LD pruning and PCA
+                    |
+       +------------+---------------------------+
+       |                                        |
+Stratified Cox scans                    GATE discovery analysis
+(signal and null outcomes)              PLINK/VCF input validation
+       |                                Survival null-model fitting
+Multiple-testing summaries              Chromosome-level SPA tests
+       |                                        |
+LD clumping and lead replication        Output and convergence checks
+       |                                        |
+PH and site diagnostics                 Matched Cox comparison (chr 3)
+       |
+Known-truth evaluation and repeated-null calibration
+       |                                        |
+       +------------- R reporting --------------+
+                     HTML and Word
 ```
 
-## Prespecified simulation
+The [Snakefile](Snakefile) orchestrates the Cox, replication, calibration and reporting stages. GATE is executed separately through the dedicated scripts described in [GATE_PILOT.md](GATE_PILOT.md).
 
-The settings are in `config.R`.
+## Statistical methods
 
-* 3,600 discovery and 2,400 replication participants before fault injection.
-* Six fictional sites, two fictional ancestry groups within sites; all people
-  are generated independently. These do not represent named African populations.
-* 2,200 autosomal markers across 22 chromosomes; 10 LD blocks per chromosome,
-  10 markers per block. Both haplotypes are generated independently, with markers
-  copying a block anchor with probability 0.93 or redrawing from its population
-  frequency. Chromosomes and positions are illustrative, not a real assembly.
-* Three direct-effect variants on chromosomes 3, 10 and 18, with conditional HRs
-  1.50, 0.67 and 1.40. These are deliberately large teaching effects. The other
-  variants in their blocks may associate through LD without a direct effect.
-* Weibull proportional hazards with site, ancestry, age and sex effects. Exact
-  event times and independent dropout, with administrative censoring at 5 years.
-* A separate null outcome has the same covariate structure but no genetic effect.
-* Technical faults: high missingness, excessive heterozygosity, exact duplicate
-  records, monomorphic/rare markers, and HWE-deviating markers.
-* The two cohorts share the generating parameters but have independent samples,
-  genotypes, outcomes and random seeds. No tuning uses replication outcomes.
+### Quality control and population structure
 
-The simulator exports RDS matrices, phenotype TSVs and ordinary gzip-compressed
-VCFs (not bgzip/tabix indexed). The analysis uses the matching RDS matrices for
-speed and to avoid an extra VCF parser dependency. This starts from simulated
-genotypes, not raw sequencing reads. No imputation or real reference panel is
-claimed.
+Sample exclusions comprise genotype missingness above 3%, robust within-population heterozygosity outliers, exact copied records and invalid phenotype records. Variant exclusions comprise missingness above 2%, minor allele frequency below 5%, minor allele count below 100 and an exact Hardy–Weinberg p-value below 10^-6 in either simulated population.
 
-## Statistical specification
+Local LD pruning uses an r-squared threshold of 0.2 within 250 kb. Genotypes are centred within population for LD calculations to separate local correlation from between-population allele-frequency differences. Three principal components are calculated independently in each cohort from globally variance-standardised, pruned genotypes. Mean-filled genotypes are used for PCA and LD calculations; Cox association models use per-variant complete cases.
 
-For marker j, the scan fits:
+These thresholds define the present experiment. The duplicate check identifies exact copies and does not estimate general kinship. Sex concordance, array batch effects, imputation quality and real reference-allele harmonisation are outside the simulation.
+
+### Cox association and replication
+
+Each eligible marker is tested using the following model:
 
 ```r
 coxph(Surv(time, event) ~ dosage_j + age10 + male +
@@ -106,138 +72,139 @@ coxph(Surv(time, event) ~ dosage_j + age10 + male +
       ties = "efron")
 ```
 
-The effect allele is always ALT (`G`) and dosage counts 0, 1 or 2 copies.
-`age10` is centred age per ten years. Population group and site enter as separate
-baseline hazard strata, not as a causal biological interpretation of ancestry.
-Genotype PCs are obtained without outcome information. Mean-filled genotypes are
-used only for PCA/LD calculations. Association models use per-variant complete
-cases and report their individual sample and event counts.
+Dosage counts copies of the ALT allele (`G`), and `age10` represents centred age per ten years. Site and ancestry group define baseline-hazard strata. Two-sided Wald tests are used for the common-variant panel. Each fit records its sample size, event count and fit status; warnings, singularity and nonfinite estimates are retained for assessment.
 
-The ordinary Cox **two-sided Wald test** is used for common variants (MAF >= 5%,
-MAC >= 100) with abundant events in unrelated simulated participants. Warnings,
-singular fits and nonfinite estimates are reported rather than silently accepted.
-The scanner is not designed for rare variants, severe sparsity, general familial
-relatedness or millions of dense markers. At that scale, select and validate an
-appropriate tool such as SPACox or GATE, rather than assuming ordinary full Cox
-fits remain appropriate.
+The primary significance threshold is 0.05 divided by all QC-passing variants, including variants whose model subsequently fails. The conventional 5 × 10^-8 threshold is reported separately, and Benjamini–Hochberg q-values provide supplementary exploratory summaries. Discovery leads are selected by p-value and clumped within 250 kb at ancestry-centred r-squared ≥ 0.2. Replication requires concordant effect direction and a two-sided p-value below 0.05 divided by the number of discovery leads; leads failing replication QC remain in that denominator.
 
-### QC and population structure
+Global and term-specific Schoenfeld-residual diagnostics assess proportional hazards for selected lead models. Site-specific estimates provide sensitivity analyses. These selected-model diagnostics are exploratory. LD clumping does not establish causal variants or fine-mapped independence.
 
-1. Validate sample/variant identifiers and genotype coding.
-2. Remove samples with >3% missing genotypes, robust within-population
-   heterozygosity outliers, exact copied records or invalid phenotype records.
-3. Remove markers with >2% missingness, MAF <5%, MAC <100, or exact HWE p <1e-6
-   in either homogeneous simulated population.
-4. Prune local LD at r-squared 0.2 within 250 kb. Genotypes are centred within
-   population for LD calculations, so between-population frequency differences
-   are not mistaken for local linkage.
-5. Compute three PCs from globally variance-standardised pruned genotypes in
-   each cohort separately. Inspect the PCA plots.
+### GATE survival mixed-model analysis
 
-These are fixed teaching thresholds, not universal prescriptions. Sex checks,
-array batch effects, reference-allele alignment, imputation quality and general
-kinship are not simulated. The duplicate detector finds exact copies only;
-production data need a validated relatedness method. Broad group strata do not
-replace modelling fine-scale structure in real African cohorts.
+GATE 0.45 was built from source commit `962f1028120c73e24ec34f29e02eeae3bdc3bfb3`. The discovery analysis uses the exported QC genotype panel, observed follow-up time in years and event coding of 1 for events and 0 for censoring. Covariates include age, sex, three PCs and explicit site and ancestry-group indicators. The implementation uses a genotype-derived relationship matrix and `LOCO=FALSE` for both signal and null analyses.
 
-### Multiple testing and replication
+GATE null-model convergence is checked before chromosome-level association testing. The PLINK BED export is decoded and compared with the original genotype matrix, including missingness. VCF analysis uses bgzip compression and a CSI index. Output checks assess variant and participant counts, identifiers, coordinates, allele orientation, allele frequencies, finite estimates, valid p-values, positive variance and saddlepoint-approximation convergence.
 
-* The primary threshold is **0.05 / all QC-passing variants**, including any
-  variants whose model subsequently fails. It controls the testing burden of
-  this simulated marker panel if its p-values are calibrated.
-* The conventional **5e-8** threshold is separately labelled. Do not equate a
-  2,200-marker training scan with a densely imputed human GWAS.
-* BH q-values are exploratory supplementary results.
-* Select leads by discovery p-value, then clump within 250 kb at ancestry-centred
-  r-squared >=0.2. Clumping is not fine-mapping or proof of independence.
-* Test only these leads in independently generated replication data. Require the
-  same effect direction and two-sided p <0.05 / number of discovery leads.
-  Leads failing replication QC still count toward that denominator.
-* Record global and term-specific Schoenfeld-residual diagnostics for lead fits,
-  and discovery site-specific sensitivity estimates. Their nominal p-values are
-  exploratory; selected-model diagnostics are not confirmatory tests.
+The original Cox scan and GATE analysis differ in their treatment of site and ancestry: stratified baseline hazards in the former and explicit covariate indicators in the latter. A separate chromosome 3 Cox comparator uses matched covariates and mean-imputed genotypes. Differences between the full scans therefore cannot be attributed solely to the association-testing method.
 
-### Validation and interpretation
+## Recorded results
 
-`scripts/validate.R` checks known HWE examples, allele-flip invariance, direct
-Cox-fit agreement, sample/variant alignment, QC exclusions, full scan coverage,
-multiple-testing arithmetic and the absence of ground-truth reads in discovery
-scripts. The simulator's causal labels are only used afterward in evaluation.
+The following values were checked against the saved outputs on the original workstation. Generated data, results, logs and reports are excluded from Git by [.gitignore](.gitignore); the paths below identify the files produced by execution, not downloadable repository artifacts.
 
-The signal scan contains omitted causal markers in each one-variant model;
-marginal HR estimates can differ from conditional generating coefficients and
-may show nonproportionality. A significant tag SNP is not proof of a causal SNP.
-The null scan is the cleaner calibration check. Lambda GC and nominal rejection
-rates are descriptive: LD makes tests dependent, and one scan cannot establish
-repeated-sampling type-I error or power. Outcomes are never permuted across
-incompatible strata to manufacture a null.
+### Cohort retention
 
-A supplementary calibration experiment regenerates 20 independent null outcomes
-on the fixed discovery genotype sample and scans the LD-pruned marker panel.
-It reports each repetition's nominal rejection fraction, the mean and its Monte
-Carlo standard error, and a t-based interval across repetitions. It also reports
-family-wise error and an exact binomial interval for that smaller panel, using
-its own Bonferroni threshold. This is a coarse, conditional calibration check;
-it does not estimate full-GWAS power or precisely establish full-GWAS family-wise
-error. The number of repetitions is set in the Snakefile null_calibration rule.
+| Cohort | Records after fault injection | Retained participants | Retained variants | Signal-outcome events | Null-outcome events |
+|---|---:|---:|---:|---:|---:|
+| Discovery | 3,604 | 3,588 | 2,160 | 981 | 850 |
+| Replication | 2,404 | 2,388 | 2,160 | 644 | 588 |
 
-Independent replication here means an independent sample from the same
-simulation model. It is not validation across new real-world populations.
+Source: `results/qc/discovery_summary.tsv` and `results/qc/replication_summary.tsv`. The additional four records in each initial cohort are injected duplicates.
 
-## Main outputs
+### Association scans
 
-| Location | Contents |
+All four discovery scans tested 2,160 variants. The panel-wide Bonferroni threshold was 2.3148 × 10^-5.
+
+| Method | Outcome | Panel Bonferroni hits | Hits at 5 × 10^-8 | Genomic inflation factor (λGC) |
+|---|---|---:|---:|---:|
+| Stratified Cox | Signal | 23 | 20 | 0.961 |
+| Stratified Cox | Null | 0 | 0 | 0.848 |
+| GATE | Signal | 21 | 13 | 0.713 |
+| GATE | Null | 0 | 0 | 0.874 |
+
+Sources: `results/summary/signal_metrics.tsv`, `results/summary/null_metrics.tsv` and `results/gate/summary.tsv`. Both Cox scans completed without failed fits. Both GATE null models converged, and each GATE scan passed 13 output checks. All required SPA tests converged: 56 for the signal outcome and 61 for the null outcome.
+
+The Cox discovery scan yielded three clumped leads. All three met the independent replication criterion of concordant direction and p < 0.01667.
+
+| Lead variant | Chromosome | Discovery HR | Replication HR (95% CI) | Replication p-value |
+|---|---:|---:|---|---:|
+| sim_rs00245 | 3 | 1.612 | 1.579 (1.391–1.793) | 1.78 × 10^-12 |
+| sim_rs00947 | 10 | 0.628 | 0.703 (0.606–0.815) | 3.04 × 10^-6 |
+| sim_rs01745 | 18 | 1.341 | 1.378 (1.208–1.573) | 1.98 × 10^-6 |
+
+Source: `results/replication/lead_results.tsv`. These are Cox lead-replication results; an independent GATE replication analysis is not part of the recorded extension.
+
+### Computational validation and null calibration
+
+All 33 checks in `results/validation/checks.tsv` passed. These cover HWE examples, allele-flip invariance, direct Cox-fit agreement, identifier alignment, injected-fault exclusions, scan completeness, multiple-testing arithmetic and separation of simulation truth from discovery analysis.
+
+A supplementary Cox calibration experiment generated 20 independent null outcomes on the fixed discovery genotypes and tested 216 LD-pruned markers per repetition. The mean nominal rejection fraction was 0.0456, with Monte Carlo standard error 0.0040 and a t-based 95% interval of 0.0372–0.0540. The observed family-wise rejection fraction for this smaller panel was 0.05, with an exact binomial 95% interval of 0.0013–0.2487. No model fits failed. Source: `results/validation/null_calibration_summary.tsv`.
+
+The repeated-null experiment is conditional on the fixed genotype sample and uses a smaller panel than the full scan. It does not establish full-GWAS family-wise error or power. GATE's single null scan and the observed deflation require further calibration assessment; successful convergence and output checks alone do not establish calibrated inference.
+
+## Reproducibility and execution
+
+| Resource | Repository location |
 |---|---|
-| `report/index.html` | Main R-generated report |
-| `report/tables/` | HTML tables, gtsummary/flextable R objects, package versions |
-| `report/plots/` | ggplot2 PNG figures |
-| `results/qc/` | Every sample and variant QC decision |
-| `results/pca/` | PCs, pruned markers, PCA objects |
-| `results/summary/` | Full association results and calibration summaries |
-| `results/replication/` | Leads, LD clumps, replication, PH and site diagnostics |
-| `results/validation/` | Checks, known-truth recovery and source checksums |
-| `logs/` | Per-stage logs and R session information |
-| `data/truth/` | Simulator truth, excluded from discovery analysis |
+| Simulation and analysis parameters | [config.R](config.R) |
+| Workflow definition | [Snakefile](Snakefile) |
+| Statistical and reporting code | [scripts](scripts) |
+| Windows launcher | [run_pipeline.ps1](run_pipeline.ps1) |
+| WSL launcher | [run_snakemake.sh](run_snakemake.sh) |
+| Recorded Python package versions | [environment-lock.txt](environment-lock.txt) |
+| GATE installation, compatibility changes and execution | [GATE_PILOT.md](GATE_PILOT.md) |
+| GATE build configuration | [config/gate.Makevars](config/gate.Makevars) |
 
-## Resources and scaling
+The recorded workstation uses Ubuntu-24.04 under WSL for Snakemake and Windows R 4.5.1 for the primary statistical workflow. The launcher requests two concurrent jobs and a 4 GB scheduling budget; these are scheduler declarations, not operating-system memory limits. R entry points use `--vanilla` to exclude personal startup profiles. R and reporting-package versions are recorded in `logs/environment.tsv` and `report/tables/package_versions.tsv`.
 
-This pilot runs on the laptop. A real whole-genome scan or a large Monte Carlo
-study may need a cluster. The rules already split association scans by chromosome;
-adapting a cluster executor requires checking the institute's scheduler, software
-environment, storage policy and approved analysis method. No cluster access or
-institutional data is used here.
+On the configured workstation:
 
-On a different Linux machine, install the R packages listed above, create an
-isolated Snakemake environment, and set `R_SCRIPT=Rscript`. The local wrapper's
-default Windows R path is specific to this computer. Installed Python package
-versions are recorded in `environment-lock.txt`; R versions in the report.
+```powershell
+Set-Location D:\survival_gwas_simulation
+.\run_pipeline.ps1 -DryRun
+.\run_pipeline.ps1
+```
 
-## Word results report
+Equivalent execution from WSL:
 
-The pipeline also creates `report/Survival_GWAS_Results.docx` in R using
-`officer`, `gtsummary`, and `flextable`, with figures generated by `ggplot2`.
-It contains editable text and tables; embedded plots can be regenerated from R.
-No Pandoc is needed. Install `officer` alongside the other reporting packages.
+```bash
+cd /mnt/d/survival_gwas_simulation
+bash run_snakemake.sh --dry-run
+bash run_snakemake.sh
+```
 
-To rebuild only the Word document after the reporting outputs exist, run from
-the project root:
+Sequential execution of the primary R stages is available through `scripts/run_all.R`. Snakemake updates stages whose dependencies have changed; the sequential runner executes every stage. Output filenames are stable, so configuration changes and reruns can replace existing results. Preserve a separate output archive when comparing configurations.
+
+A fresh installation requires the R dependencies checked in [scripts/preflight.R](scripts/preflight.R), the officer package for Word reporting, an isolated Snakemake environment at `.venv/`, and an appropriate R executable. On Linux, set `R_SCRIPT=Rscript`; the wrapper's default Windows R path is specific to the recorded workstation. The Python version listing does not provision the R or GATE environments.
+
+The GATE runtime uses a separate Linux environment within `tools/gate-runtime.ext4`, mounted at `/mnt/gate-runtime` on the Toshiba drive. Its installation and build-compatibility modifications are documented in [GATE_PILOT.md](GATE_PILOT.md). The chromosome 3 pilot fits the signal null model needed by the full-scan wrapper. After preparing inputs and completing installation, the pilot and full-analysis wrappers are executed in that order, followed by `scripts/summarise_gate.R` and `scripts/report_gate.R`. The GATE runtime, source archive and generated inputs are not distributed in this repository.
+
+## Reporting and output record
+
+Reports are generated in R using ggplot2, gtsummary, flextable and officer. Word documents contain editable text and tables with embedded figures. The primary Word stage is included in both Snakemake and `scripts/run_all.R`; the GATE supplement is rendered separately.
+
+| Generated location | Contents |
+|---|---|
+| `report/index.html` | Main Cox, replication and calibration report |
+| `report/Survival_GWAS_Results.docx` | Primary Word results report |
+| `report/GATE_Survival_GWAS_Results.docx` | GATE results supplement |
+| `report/tables/` and `report/plots/` | Report tables, R objects, figures and package versions |
+| `results/qc/` and `results/pca/` | QC decisions, principal components and pruned marker sets |
+| `results/summary/` | Full Cox association results and scan summaries |
+| `results/replication/` | Leads, clumps, replication and model diagnostics |
+| `results/gate/` | GATE models, association results, checks and comparison summaries |
+| `results/validation/` | Computational checks, truth recovery, calibration and source checksums |
+| `logs/` | Execution logs and environment records |
+| `data/truth/` | Simulation truth used only for evaluation after discovery |
+
+To regenerate the primary Word report after its reporting inputs exist:
 
 ```powershell
 & 'C:/Program Files/R/R-4.5.1/bin/Rscript.exe' --vanilla scripts/report_word.R
 ```
 
-The Snakemake workflow and `scripts/run_all.R` both include the Word stage.
+## Interpretation
 
-## GATE extension
+The recorded analyses demonstrate execution of survival association workflows and recovery of selected simulated signals. Replication represents an independent sample from the same generating model, rather than transferability across real populations. The simulation contains unrelated individuals and cannot establish GATE's advantages for familial relatedness or its computational performance at biobank scale.
 
-GATE 0.45 was used for analyses.
+Single-marker hazard ratios are marginal estimates in a simulation with multiple causal effects and can differ from the conditional generating coefficients. LD can produce significant tag variants without direct effects. Omitted causal predictors may also affect proportional-hazards diagnostics. The signal scan is therefore not a clean calibration experiment.
+
+The observed null-scan deflation, limited Monte Carlo repetitions, simplified population structure and sparse marker panel constrain inferential conclusions. Application to real cohorts requires validated relatedness and population-structure handling, phenotype and genotype quality assessment, an appropriate analysis environment and independent evaluation of calibration and replication. GATE is a survival mixed-model association method, not a Bayesian posterior sampler.
 
 ## Method references
 
-* [survival::coxph](https://stat.ethz.ch/R-manual/R-devel/library/survival/html/coxph.html)
-* [gwasurvivr](https://bioconductor.org/packages/release/bioc/html/gwasurvivr.html)
-* [GATE survival GWAS method](https://www.nature.com/articles/s41467-022-32885-x)
-* [PLINK HWE and population structure](https://www.cog-genomics.org/plink/2.0/tutorials/qc1)
-* [PLINK PCA](https://www.cog-genomics.org/plink/2.0/strat)
-* [Snakemake installation and Windows/WSL support](https://snakemake.readthedocs.io/en/stable/getting_started/installation.html)
-* [gtsummary conversion to flextable](https://www.danieldsjoberg.com/gtsummary/reference/as_flex_table.html)
+- [GATE source and implementation](https://github.com/weizhou0/GATE)
+- [GATE survival GWAS method](https://www.nature.com/articles/s41467-022-32885-x)
+- [survival::coxph documentation](https://stat.ethz.ch/R-manual/R-devel/library/survival/html/coxph.html)
+- [PLINK quality-control guidance](https://www.cog-genomics.org/plink/2.0/tutorials/qc1)
+- [PLINK principal components analysis](https://www.cog-genomics.org/plink/2.0/strat)
+- [Snakemake documentation](https://snakemake.readthedocs.io/)
+- [gtsummary conversion to flextable](https://www.danieldsjoberg.com/gtsummary/reference/as_flex_table.html)
