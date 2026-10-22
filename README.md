@@ -54,6 +54,41 @@ Known-truth evaluation and repeated-null calibration
 
 The [Snakefile](Snakefile) orchestrates the Cox, replication, calibration and reporting stages. GATE is executed separately through the dedicated scripts described in [GATE_PILOT.md](GATE_PILOT.md).
 
+## PLINK preprocessing
+
+A tested PLINK 2 branch now prepares both small synthetic survival cohorts through VCF import, missingness assessment, sample exclusions, MAF/MAC filtering, ancestry-specific Hardy–Weinberg checks, LD pruning, PCA and BED/BIM/FAM export. The [detailed workflow](PLINK_PREPROCESSING.md) explains every command, threshold, output and survival-model handoff; a [plain-text copy](PLINK_WORKFLOW.txt) is also available.
+
+```bash
+# WSL/Linux, from the repository root; set PLINK2 to your installed executable.
+export PLINK2=/home/vusi/miniforge3/bin/plink2
+bash run_snakemake.sh plink_preprocessing --dry-run
+bash run_snakemake.sh plink_preprocessing
+```
+
+| Stage | Specification and output |
+|---|---|
+| Import | `--vcf --double-id --make-pgen`; full sample IDs retained as FID/IID |
+| Sample QC | Existing R audit supplies duplicate, heterozygosity and phenotype exclusions; PLINK applies `--mind 0.03` |
+| Variant QC | `--geno 0.02 --maf 0.05 --mac 100` after sample exclusions |
+| HWE | Exact tests within each ancestry; exclude variants with p < 1e-6 in either group |
+| LD pruning | `--indep-pairwise 250kb 1 0.2`; pruned markers used for PCA only |
+| PCA | `--pca 3`; finite PCs joined to survival metadata by sample ID |
+| GATE-format export | `--make-bed`; every BED call decoded and checked |
+| Validation | Sample/variant IDs matched to R QC; every dosage compared with the original VCF; ALT-frequency tolerance 1e-5 |
+
+PLINK's pooled-genotype LD pruning differs from the original R ancestry-centred procedure. The existing published Cox/GATE results retain their original PCs. The new files in `results/plink/{cohort}/` are a separately validated preprocessing branch; adopting these PCs in association models requires an explicit rerun. The two-field survival outcome (follow-up time and event status) is preserved in `survival_covariates.tsv`; a case–control PLINK `--glm` run is not substituted for survival analysis.
+
+### Recorded small-dataset test
+
+Both cohorts completed through Snakemake on 22 October 2026 using PLINK v2.0.0-a.7.8 (19 September 2026), two threads and 2,048 MB requested PLINK memory. Sample and variant sets matched the existing R QC outputs, and all dosage, BED, PCA and covariate-join checks passed.
+
+| Cohort | Input samples | QC samples | QC variants | PCA markers | Genotype cells verified |
+|---|---:|---:|---:|---:|---:|
+| Discovery | 3,604 | 3,588 | 2,160 | 216 | 7,750,080 |
+| Replication | 2,404 | 2,388 | 2,160 | 216 | 5,158,080 |
+
+Each input contained 2,200 markers; 10 variants per cohort failed the ancestry-specific HWE stage after the preceding variant filters. The maximum ALT-frequency discrepancy was below 0.000001, consistent with printed-frequency rounding. Validation summaries: [discovery](results/plink/discovery/validation.json) and [replication](results/plink/replication/validation.json).
+
 ## Statistical methods
 
 ### Quality control and population structure

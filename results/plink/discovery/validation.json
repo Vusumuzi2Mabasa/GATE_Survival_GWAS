@@ -1,0 +1,18 @@
+{
+  "cohort": "discovery",
+  "plink_version": "PLINK v2.0.0-a.7.8 64-bit (19 Sep 2026)",
+  "raw_samples": 3604,
+  "raw_variants": 2200,
+  "retained_samples": 3588,
+  "retained_variants": 2160,
+  "pruned_variants": 216,
+  "hwe_excluded": 10,
+  "genotype_cells_checked": 7750080,
+  "max_alt_frequency_error": 4.999999999866223e-07,
+  "sample_ids_match_R": true,
+  "variant_ids_match_R": true,
+  "vcf_dosages_match": true,
+  "bed_roundtrip_matches": true,
+  "finite_pcs": true,
+  "survival_join_matches": true
+}

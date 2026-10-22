@@ -53,3 +53,13 @@ results/validation/*
 !results/validation/null_calibration_summary.tsv
 !results/gate/chr3_comparison.tsv
 !results/validation/null_repetitions.tsv
+
+# Compact PLINK validation summaries; genotype and sample-level outputs remain local.
+!results/plink/
+results/plink/*
+!results/plink/discovery/
+!results/plink/replication/
+results/plink/discovery/*
+results/plink/replication/*
+!results/plink/discovery/validation.json
+!results/plink/replication/validation.json

@@ -150,3 +150,35 @@ rule word_report:
     log: "logs/report_word.log"
     resources: mem_mb=1600
     shell: "{R:q} --vanilla scripts/report_word.R > {log:q} 2>&1"
+
+# Optional PLINK preprocessing branch. Existing Cox/GATE analyses retain their R PCs.
+rule plink_preprocessing:
+    input:
+        expand("results/plink/{cohort}/validation.json", cohort=COHORTS)
+
+rule plink_cohort:
+    input:
+        vcf="data/raw/{cohort}.vcf.gz",
+        pheno="data/raw/{cohort}_phenotypes.tsv",
+        samples="results/qc/{cohort}_samples.tsv",
+        variants="results/qc/{cohort}_variants.tsv",
+        code="scripts/plink_preprocess.py"
+    output:
+        "results/plink/{cohort}/validation.json",
+        "results/plink/{cohort}/survival_covariates.tsv",
+        "results/plink/{cohort}/qc.pgen",
+        "results/plink/{cohort}/qc.pvar",
+        "results/plink/{cohort}/qc.psam",
+        "results/plink/{cohort}/gate.bed",
+        "results/plink/{cohort}/gate.bim",
+        "results/plink/{cohort}/gate.fam",
+        "results/plink/{cohort}/pcs.eigenvec",
+        "results/plink/{cohort}/pcs.eigenval",
+        "results/plink/{cohort}/ld.prune.in",
+        "results/plink/{cohort}/commands.sh",
+        "results/plink/{cohort}/version.txt"
+    wildcard_constraints: cohort="discovery|replication"
+    log: "logs/plink_{cohort}.log"
+    threads: 2
+    resources: mem_mb=2400
+    shell: "python3 scripts/plink_preprocess.py {wildcards.cohort:q} --threads {threads} > {log:q} 2>&1"
